@@ -9,15 +9,20 @@ module "eks" {
   subnet_ids = module.vpc.private_subnets
 
   enable_cluster_creator_admin_permissions = true
+  endpoint_public_access                   = true
+  endpoint_private_access                  = true
+  endpoint_public_access_cidrs             = var.admin_cidrs
 
   addons = {
+    coredns    = {}
+    kube-proxy = {}
     vpc-cni = {
       before_compute           = true
       service_account_role_arn = module.vpc_cni_irsa.arn
     }
-    eks-pod-identity-agent = { 
-        before_compute = true 
-        }
+    eks-pod-identity-agent = {
+      before_compute = true
+    }
     aws-ebs-csi-driver = {
       service_account_role_arn = module.ebs_csi_irsa.arn
       before_compute           = false
