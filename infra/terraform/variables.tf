@@ -33,3 +33,27 @@ variable "admin_cidrs" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
+
+variable "hosted_zone_id" {
+  description = "Route53 Hosted Zone ID"
+  type        = string
+  default     = "Z0134000O7QQEZHP6XIL"
+}
+
+variable "external_dns_domain_filters" {
+  description = "Domains ExternalDNS is allowed to manage"
+  type        = list(string)
+  default     = ["alistechlab.click"]
+}
+
+variable "external_dns_txt_owner_id" {
+  description = "ExternalDNS TXT registry owner ID"
+  type        = string
+  default     = null
+}
+
+variable "acme_email" {
+  description = "Email address for Let's Encrypt ACME registration"
+  type        = string
+  sensitive   = true
+}

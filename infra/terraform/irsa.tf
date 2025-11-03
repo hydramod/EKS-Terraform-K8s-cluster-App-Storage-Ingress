@@ -29,14 +29,13 @@ module "vpc_cni_irsa" {
   }
 }
 
-
 module "cert_manager_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts"
   version = "6.2.3"
 
   name                          = "${var.name}-cert-manager"
   attach_cert_manager_policy    = true
-  cert_manager_hosted_zone_arns = ["arn:aws:route53:::hostedzone/Z0134000O7QQEZHP6XIL"]
+  cert_manager_hosted_zone_arns = ["arn:aws:route53:::hostedzone/${var.hosted_zone_id}"]
 
   oidc_providers = {
     main = {
@@ -52,7 +51,7 @@ module "external_dns_irsa" {
 
   name                          = "${var.name}-external-dns"
   attach_external_dns_policy    = true
-  external_dns_hosted_zone_arns = ["arn:aws:route53:::hostedzone/Z0134000O7QQEZHP6XIL"]
+  external_dns_hosted_zone_arns = ["arn:aws:route53:::hostedzone/${var.hosted_zone_id}"]
 
   oidc_providers = {
     main = {

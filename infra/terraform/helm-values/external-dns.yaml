@@ -1,0 +1,24 @@
+provider: aws
+
+aws:
+  region: ${region}
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: ${role_arn}
+
+policy: sync
+txtOwnerId: ${region}-external-dns
+txtPrefix: _external-dns.
+
+domainFilters:
+%{ for domain in external_dns_domain_filters ~}
+  - ${domain}
+%{ endfor ~}
+
+sources:
+  - service
+  - ingress
+
+logLevel: info
+logFormat: json
