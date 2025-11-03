@@ -1,150 +1,354 @@
-# EKS-Terraform-K8s-cluster-App-Storage-Ingress
+# EKS + Terraform + Ingress + TLS + Argo CD — End‑to‑End Demo
 
-## Comprehensive AWS EKS Cluster Deployment with Terraform, Argo CD, and Full Application Stack
+Spin up an **Amazon EKS** cluster with Terraform, install core add‑ons (Ingress‑NGINX, cert‑manager, external‑dns, Argo CD), and deploy a sample **Guestbook** app with HTTPS and DNS via Route 53 — all orchestrated through a simple `Makefile`.
 
-This repository provides a complete, production-ready infrastructure-as-code (IaC) solution for deploying an Amazon EKS (Elastic Kubernetes Service) cluster on AWS, along with a comprehensive application stack managed by Argo CD. The setup is designed for modern cloud-native applications, featuring automated TLS, DNS management, and persistent storage.
+> **Highlights**
+>
+> * **IaC**: VPC, EKS, IRSA with Terraform
+> * **Add‑ons via Helm**: Ingress‑NGINX, cert‑manager, external‑dns, Argo CD
+> * **DNS + TLS**: Route 53 records managed by external‑dns; ACME via cert‑manager (Let’s Encrypt)
+> * **GitOps**: Argo CD deploys the `guestbook` app manifests in `k8s/apps/guestbook`
+> * **1‑command bring‑up**: `make up`
 
-### Key Features
+---
 
-The solution orchestrates the deployment of the following components:
-
-| Component | Technology | Purpose |
-| :--- | :--- | :--- |
-| **Infrastructure** | **Terraform** (`infra/terraform`) | Provisions the VPC, EKS cluster, and necessary IAM roles (IRSA). |
-| **Cluster Management** | **Argo CD** (via Helm) | Deploys and manages the cluster add-ons and applications using GitOps principles. |
-| **Ingress Controller** | **NGINX Ingress Controller** (via Helm) | Manages external access to services within the cluster. |
-| **TLS/Certificates** | **cert-manager** (via Helm) | Automates the issuance and renewal of TLS certificates from Let's Encrypt using the Route53 DNS01 challenge. |
-| **DNS Management** | **ExternalDNS** (via Helm) | Automatically creates and manages Route53 records for Kubernetes Ingress resources. |
-| **Persistent Storage** | **AWS EBS gp3** | Provides a default StorageClass for high-performance, cost-effective persistent volumes. |
-| **Sample Application** | **Guestbook App** (`k8s/apps/guestbook`) | A simple, HTTPS-enabled echo application deployed via Argo CD to validate the entire stack. |
-
-### Repository Structure
-
-The project is organized into two main directories: `infra` for Terraform code and `k8s` for Kubernetes manifests.
+## Repository Structure
 
 ```
-.
-├── infra/
-│   └── terraform/
-│       ├── bootstrap/             # Scripts for initial setup (e.g., kubeconfig)
-│       ├── helm-values/           # Helm value files for cluster add-ons
-│       ├── eks.tf                 # EKS cluster and node group definition
-│       ├── helm.tf                # Helm releases for cluster add-ons (NGINX, cert-manager, ExternalDNS)
-│       ├── irsa.tf                # IAM Roles for Service Accounts (IRSA)
-│       ├── locals.tf              # Local variables
-│       ├── outputs.tf             # Outputs like EKS endpoint and kubeconfig
-│       ├── provider.tf            # AWS and Kubernetes providers configuration
-│       ├── variables.tf           # Input variables for customization
-│       └── vpc.tf                 # VPC and networking definition
-└── k8s/
-    ├── apps/
-    │   └── guestbook/             # Kubernetes manifests for the sample application
-    │       ├── deployment.yaml    # Guestbook Deployment
-    │       ├── ingress.yaml       # Guestbook Ingress with cert-manager annotations
-    │       └── service.yaml       # Guestbook Service
-    ├── argo-cd/
-    │   └── guestbook-app.yaml     # Argo CD Application manifest for the Guestbook app
-    └── cert-manager/
-        └── cluster-issuer.yaml    # ClusterIssuer configuration for Let's Encrypt (DNS01)
-```
-
-### Deployment Flow
-
-The deployment follows a two-stage GitOps approach:
-
-1.  **Terraform Deployment (Infrastructure):**
-    *   **VPC & EKS:** Terraform provisions the AWS VPC, Subnets, and the EKS cluster itself (`vpc.tf`, `eks.tf`).
-    *   **Add-ons (Helm):** Terraform uses the `helm_release` resource to deploy critical cluster add-ons:
-        *   **NGINX Ingress Controller**
-        *   **cert-manager**
-        *   **ExternalDNS**
-        *   **Argo CD**
-    *   **IRSA:** IAM Roles for Service Accounts are created for `cert-manager` and `ExternalDNS` to interact with AWS Route53.
-
-2.  **Argo CD Deployment (Applications):**
-    *   Once Argo CD is deployed by Terraform, it is configured to monitor this repository.
-    *   The `k8s/argo-cd/guestbook-app.yaml` manifest defines an Argo CD `Application` resource.
-    *   This application points to the `k8s/apps/guestbook` path in this repository, ensuring the sample application (Deployment, Service, Ingress) is automatically synchronized and deployed to the EKS cluster.
-
-### Prerequisites
-
-To deploy this infrastructure, you will need:
-
-*   **AWS Account:** Configured with appropriate credentials.
-*   **Terraform:** Installed locally (version 1.0+ recommended).
-*   **kubectl:** Installed locally.
-*   **Domain Name:** A registered domain name managed by AWS Route53.
-*   **Environment Variables:** The deployment relies on several variables defined in the `.env` file and consumed by `variables.tf`.
-
-### Configuration and Customization
-
-The primary configuration points are located in `infra/terraform/variables.tf` and the `.env` file.
-
-| Variable | Description | Default Value | Customization Notes |
-| :--- | :--- | :--- | :--- |
-| `name` | Base name for all EKS resources. | `demo-eks` | Change this to a unique identifier for your environment. |
-| `region` | AWS region for deployment. | `us-east-1` | Select your desired AWS region. |
-| `cluster_version` | Kubernetes version for EKS. | `1.34` | Ensure this is a supported EKS version. |
-| `node_desired_size` | Desired number of worker nodes. | `2` | Scale up or down based on your workload needs. |
-| `node_instance_types` | Instance type for EKS managed node group. | `t3.large` | Adjust for performance and cost optimization. |
-| `ingress_hostname` | The hostname for the sample application. | `guestbook.alistechlab.click` | **CRITICAL:** Must be a subdomain of your Route53-managed domain. |
-| `acme_email` | Email for Let's Encrypt registration. | `${ACME_EMAIL}` | Set this in your `.env` file. |
-| `hosted_zone_id` | Route53 Hosted Zone ID for ExternalDNS. | `${HOSTED_ZONE_ID}` | Set this in your `.env` file. |
-
-### Deployment Steps
-
-1.  **Clone the Repository:**
-    ```bash
-    git clone https://github.com/hydramod/EKS-Terraform-K8s-cluster-App-Storage-Ingress.git
-    cd EKS-Terraform-K8s-cluster-App-Storage-Ingress/infra/terraform
-    ```
-
-2.  **Configure Environment Variables:**
-    Create a `.env` file in the `infra/terraform` directory and populate it with your specific values.
-
-    ```bash
-    # .env example
-    export ACME_EMAIL="your-email@example.com"
-    export HOSTED_ZONE_ID="Z0123456789ABCDEF"
-    ```
-
-3.  **Initialize Terraform:**
-    ```bash
-    terraform init
-    ```
-
-4.  **Review and Apply:**
-    Review the plan and apply the changes to provision the infrastructure and core services.
-
-    ```bash
-    terraform plan
-    terraform apply -auto-approve
-    ```
-
-5.  **Access the Cluster:**
-    After a successful apply, Terraform will output the command to configure `kubectl`.
-
-    ```bash
-    # Example output:
-    # Run this command to configure kubectl:
-    # aws eks update-kubeconfig --name demo-eks --region us-east-1
-    ```
-
-6.  **Verify Argo CD and Application Deployment:**
-    *   Check the Argo CD application status:
-        ```bash
-        kubectl get application guestbook -n argo-cd
-        ```
-    *   Wait for the application to synchronize and become healthy.
-    *   Access the sample application via the hostname you configured (e.g., `https://guestbook.yourdomain.com`).
-
-### Cleanup
-
-To destroy all provisioned resources and avoid incurring further AWS costs, run the following command from the `infra/terraform` directory:
-
-```bash
-terraform destroy -auto-approve
+📦EKS-Terraform-K8s-cluster-App-Storage-Ingress
+ ┣ 📂infra
+ ┃ ┗ 📂terraform
+ ┃ ┃ ┣ 📂bootstrap                  # Creates S3 bucket for Terraform remote state (local state here only)
+ ┃ ┃ ┃ ┣ 📜main.tf
+ ┃ ┃ ┃ ┣ 📜outputs.tf
+ ┃ ┃ ┃ ┣ 📜terraform.tfvars
+ ┃ ┃ ┃ ┗ 📜variables.tf
+ ┃ ┃ ┣ 📂helm-values                 # Values passed to Helm charts by Terraform
+ ┃ ┃ ┃ ┣ 📜argo-cd.yaml              # ingress for argocd.${DOMAIN}, TLS via ClusterIssuer
+ ┃ ┃ ┃ ┣ 📜cert-manager.yaml         # IRSA role annotation templated in
+ ┃ ┃ ┃ ┗ 📜external-dns.yaml         # IRSA + domain filters + region templated in
+ ┃ ┃ ┣ 📜data.tf
+ ┃ ┃ ┣ 📜eks.tf                      # EKS cluster/node groups
+ ┃ ┃ ┣ 📜helm.tf                     # Helm releases (ingress-nginx, cert-manager, external-dns, argo-cd)
+ ┃ ┃ ┣ 📜irsa.tf                     # IAM Roles for Service Accounts (cert-manager, external-dns)
+ ┃ ┃ ┣ 📜locals.tf
+ ┃ ┃ ┣ 📜outputs.tf                  # At least: region, cluster_name, etc.
+ ┃ ┃ ┣ 📜provider.tf
+ ┃ ┃ ┣ 📜terraform.tfvars            # Main TF variables for this environment
+ ┃ ┃ ┣ 📜variables.tf
+ ┃ ┃ ┗ 📜vpc.tf                      # VPC/Subnets/IGW/NAT/etc.
+ ┣ 📂k8s
+ ┃ ┣ 📂apps
+ ┃ ┃ ┗ 📂guestbook                   # Sample app: Deployment/Service/Ingress + TLS
+ ┃ ┃   ┣ 📜deployment.yaml
+ ┃ ┃   ┣ 📜ingress.yaml
+ ┃ ┃   ┗ 📜service.yaml
+ ┃ ┣ 📂argo-cd
+ ┃ ┃ ┗ 📜guestbook-app.yaml          # Argo CD Application pointing to k8s/apps/guestbook
+ ┃ ┗ 📂cert-manager
+ ┃   ┗ 📜cluster-issuer.yaml         # ACME (Let’s Encrypt) ClusterIssuer (DNS01 via Route 53)
+ ┣ 📜.env                            # Environment values consumed by Makefile
+ ┣ 📜.gitignore
+ ┣ 📜Makefile                        # Orchestration for bring‑up / deploy / checks / teardown
+ ┗ 📜README.md
 ```
 
 ---
-*README generated by Manus AI based on repository analysis.*
+
+## Prerequisites
+
+* **AWS account** with a **public Route 53 hosted zone** for your domain (e.g. `example.com`).
+* **Credentials** with permissions to create VPC, EKS, IAM, Route 53 records, and S3.
+* **CLI tools**: `terraform` (≥ **1.13.4**), `kubectl`, `awscli`, `helm`, `jq`, `sed`, `bash`.
+* Optionally set an AWS profile: `export AWS_PROFILE=your-profile`.
+
+> The **bootstrap** step uses local TF state to create a remote‑state **S3 bucket** (required provider `hashicorp/aws` **6.18.0**, region `us-east-1`).
+
+---
+
+## Quick Start (TL;DR)
+
+1. **Configure `.env`** (see below). Ensure your Route 53 hosted zone exists and is authoritative.
+
+2. **One‑shot bring‑up**:
+
+   ```bash
+   make up
+   ```
+
+   This will:
+
+   * (Optionally) create the **remote state S3** bucket under `infra/terraform/bootstrap`
+   * `terraform apply` the main infra (VPC, EKS, IRSA, Helm add‑ons)
+   * Set **kubeconfig** to your EKS cluster context
+   * Wait for **Ingress‑NGINX** & **cert-manager** to become ready
+   * Apply the **ClusterIssuer** (Let’s Encrypt → Route 53 DNS01)
+   * Deploy the **guestbook** app via **Argo CD**
+   * Perform health checks (ingress + HTTPS)
+
+3. **Check status**:
+
+   ```bash
+   make status
+   ```
+
+4. **Destroy** when done:
+
+   ```bash
+   make destroy
+   ```
+
+---
+
+## Environment Configuration (`.env`)
+
+Create a `.env` file in repo root; it is auto‑loaded by the `Makefile`.
+
+```env
+# Required for ClusterIssuer substitution and convenience targets
+ACME_EMAIL=you@example.com
+DOMAIN=example.com                # Your Route 53 public hosted zone
+REGION=us-east-1                  # Must match your AWS region
+HOSTED_ZONE_ID=ZABCDEFGHIJKL      # Route 53 hosted zone ID for DOMAIN
+
+# Optional
+AWS_PROFILE=default
+```
+
+> `Makefile` expands these into `k8s/cert-manager/cluster-issuer.yaml` at apply time and uses them for log messages & curl checks. The **TLS endpoints** will be:
+>
+> * **Argo CD**: `https://argocd.${DOMAIN}`
+> * **Guestbook**: `https://guestbook.${DOMAIN}`
+
+---
+
+## What Terraform Provisions
+
+### Networking & Cluster
+
+* **VPC** with public/private subnets
+* **EKS** cluster (plus node groups)
+
+### IAM / IRSA
+
+* **IAM OIDC provider** for the cluster
+* **IRSA roles** for:
+
+  * **cert-manager** → allow Route 53 DNS01 challenge changes
+  * **external-dns** → manage DNS records in your hosted zone(s)
+
+### Helm Releases (via Terraform)
+
+* **Ingress‑NGINX** (namespace: `ingress-nginx`)
+* **cert-manager** (namespace: `cert-manager`)
+
+  * Helm values file: `infra/terraform/helm-values/cert-manager.yaml`
+  * Injects `serviceAccount.annotations.eks.amazonaws.com/role-arn` with the IRSA role
+* **external-dns** (namespace typically `kube-system`)
+
+  * Helm values file: `infra/terraform/helm-values/external-dns.yaml`
+  * Injects `region`, IRSA `role-arn`, and `domainFilters` (via Terraform variables)
+* **Argo CD** (namespace: `argo-cd`)
+
+  * Helm values file: `infra/terraform/helm-values/argo-cd.yaml`
+  * Exposes `argocd.${DOMAIN}` via Ingress & TLS (`letsencrypt-production` ClusterIssuer)
+
+> Values files are **templated** by Terraform to pass environment‑specific values such as `${region}`, `${role_arn}`, `${domain}`, and `external_dns_domain_filters`.
+
+---
+
+## GitOps Application (Guestbook)
+
+* **Argo CD Application**: `k8s/argo-cd/guestbook-app.yaml` points to the manifests in `k8s/apps/guestbook`.
+* The **Guestbook** app includes:
+
+  * `Deployment` (`guestbook-ui`), `Service`
+  * `Ingress` → host `guestbook.${DOMAIN}` with TLS secret `guestbook-tls`
+* **cert-manager** issues a TLS certificate using the `ClusterIssuer` applied by `make issuer`.
+
+---
+
+## Makefile Targets
+
+> Run `make help` to see this list at any time.
+
+* **`make up`** – Full flow: bootstrap (if present) → infra → kubeconfig → wait ingress & cert-manager → apply ClusterIssuer → deploy app → wait & verify
+* **`make infra`** – `terraform init/plan/apply` in `infra/terraform`
+* **`make kubeconfig`** – Configure kubectl from Terraform outputs: `cluster_name`, `region`
+* **`make wait-ingress`** – Wait for Ingress‑NGINX controller rollout and capture ELB hostname to `.ingress_hostname`
+* **`make cert-manager-wait`** – Wait for cert-manager deployments to be ready
+* **`make issuer`** – Apply `k8s/cert-manager/cluster-issuer.yaml` with `.env` substitutions (ACME email, domain, region, hosted zone id)
+* **`make deploy-app`** – Apply the Argo CD Application manifest
+* **`make wait-app`** – Wait for the app `Deployment` + `Certificate`, then run HTTP→HTTPS and TLS curl checks
+* **`make status`** – Quick cluster status (nodes, pods, services, ingress, certs, external‑dns)
+* **`make dns`** – Optional `nslookup` for `$(DOMAIN)`
+* **`make destroy`** – `terraform destroy` for `infra/terraform`
+* **`make clean`** – Remove `.ingress_hostname`
+
+---
+
+## Step‑by‑Step Bring‑Up
+
+> If using the **one‑shot** `make up`, you can skip these and let the Makefile do it for you.
+
+1. **Bootstrap remote state (optional)**
+
+   ```bash
+   cd infra/terraform/bootstrap
+   terraform init -upgrade
+   terraform apply -auto-approve
+   ```
+
+   * Creates S3 bucket `bucket_name` (default example: `eks-demo-alistechlab`, region `us-east-1`)
+   * This folder **keeps local state**; do not point it at the bucket it creates
+
+2. **Provision infra**
+
+   ```bash
+   terraform -chdir=infra/terraform init -upgrade
+   terraform -chdir=infra/terraform plan
+   terraform -chdir=infra/terraform apply -auto-approve
+   ```
+
+3. **Configure kubectl**
+
+   ```bash
+   aws eks update-kubeconfig \
+     --name  "$(terraform -chdir=infra/terraform output -raw cluster_name)" \
+     --region "$(terraform -chdir=infra/terraform output -raw region)" \
+     --alias  "$(terraform -chdir=infra/terraform output -raw cluster_name)"
+   kubectl config use-context "$(terraform -chdir=infra/terraform output -raw cluster_name)"
+   ```
+
+4. **Wait for add‑ons** (Ingress, cert-manager)
+
+   ```bash
+   kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=5m
+   kubectl -n cert-manager rollout status deploy/cert-manager --timeout=5m
+   kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=5m
+   kubectl -n cert-manager rollout status deploy/cert-manager-cainjector --timeout=5m
+   ```
+
+5. **Apply ClusterIssuer** (Let’s Encrypt, Route 53 DNS01)
+
+   ```bash
+   # Uses .env substitutions for ACME_EMAIL, DOMAIN, REGION, HOSTED_ZONE_ID
+   sed -e "s|\${ACME_EMAIL}|$ACME_EMAIL|g" \
+       -e "s|\${DOMAIN}|$DOMAIN|g" \
+       -e "s|\${REGION}|$REGION|g" \
+       -e "s|\${HOSTED_ZONE_ID}|$HOSTED_ZONE_ID|g" \
+       k8s/cert-manager/cluster-issuer.yaml | kubectl apply -f -
+   ```
+
+6. **Deploy GitOps application (Argo CD Application)**
+
+   ```bash
+   kubectl -n argo-cd apply -f k8s/argo-cd/guestbook-app.yaml
+   ```
+
+7. **Check ingress & TLS**
+
+   ```bash
+   kubectl -n default get ingress guestbook -o wide
+   curl -sI http://guestbook.$DOMAIN | sed -n '1,3p'   # expect redirect to HTTPS
+   curl -skI https://guestbook.$DOMAIN | sed -n '1,3p' # check 200/301 response
+   ```
+
+---
+
+## Accessing Argo CD
+
+* URL: `https://argocd.${DOMAIN}`
+* Initial admin password (Helm default):
+
+  ```bash
+  kubectl -n argo-cd get secret argocd-initial-admin-secret \
+    -o jsonpath='{.data.password}' | base64 -d; echo
+  ```
+* The supplied `argo-cd.yaml` enables an Ingress (class `nginx`) and annotates it for TLS using the `letsencrypt-production` ClusterIssuer.
+
+---
+
+## Variables & Outputs
+
+### Bootstrap module (`infra/terraform/bootstrap`)
+
+* **Terraform**: `required_version = "1.13.4"`
+* **AWS provider**: `hashicorp/aws` `6.18.0`
+* **Region**: `us-east-1`
+* **Variables**:
+
+  * `bucket_name` *(string, required)* — S3 bucket for remote state (default example `eks-demo-alistechlab`)
+* **Outputs**:
+
+  * `bucket_name`
+
+### Main infra (`infra/terraform`)
+
+* **Expected outputs** (consumed by `make kubeconfig`):
+
+  * `cluster_name`
+  * `region`
+* **Helm values templating** (Terraform → values files):
+
+  * `cert-manager.yaml`: `${role_arn}` → IRSA role for cert-manager
+  * `external-dns.yaml`: `${region}`, `${role_arn}`, `external_dns_domain_filters`
+  * `argo-cd.yaml`: `${domain}`
+
+---
+
+## DNS & Certificates — How it Comes Together
+
+1. **Ingress‑NGINX** exposes a LoadBalancer Service → AWS ELB hostname (captured in `.ingress_hostname`).
+2. **external‑dns** watches Services/Ingresses, then **creates Route 53 records** (restricted by `domainFilters`).
+3. **cert‑manager** requests ACME certs using **DNS‑01** solver against Route 53, assuming the IRSA role.
+4. **Your app** and **Argo CD** Ingresses terminate TLS using those certificates.
+
+---
+
+## Troubleshooting
+
+* **ELB hostname never appears**
+
+  * `kubectl -n ingress-nginx get svc ingress-nginx-controller -o wide`
+  * Ensure the cluster has public subnets tagged for LoadBalancer and that your AWS account quota allows it.
+
+* **No DNS records created**
+
+  * Check `external-dns` logs; confirm IRSA role permissions and correct `domainFilters` including your `${DOMAIN}`.
+
+* **Certificates stuck in `Pending`**
+
+  * `kubectl describe challenge -A` and `kubectl describe order -A`
+  * Confirm Route 53 hosted zone is public and authoritative; ensure `HOSTED_ZONE_ID` matches `DOMAIN`.
+
+* **EKS AMI/Provider mismatch**
+
+  * If you see issues with node AMIs or version skew, set managed node group `ami_type = "AL2023_x86_64_STANDARD"` and ensure Kubernetes provider compatibility with your EKS version.
+
+* **Argo CD login fails / certificate not ready**
+
+  * Wait for `argocd-server-tls` secret; verify ClusterIssuer exists and is `Ready`.
+
+* **Makefile env missing**
+
+  * `make issuer` requires `ACME_EMAIL`, `DOMAIN`, `REGION`, `HOSTED_ZONE_ID`. Verify `.env`.
+
+---
+
+## Security & Cost Notes
+
+* This stack creates billable resources (EKS, Load Balancers, NAT, Route 53, etc.). **Destroy** when not in use.
+* Lock down IRSA roles to the specific hosted zone and least privileges required by cert‑manager and external‑dns.
+* For production, harden the S3 remote state bucket: enable versioning, encryption, and public access blocks.
+
+---
+
+## Cleanup
+
+```bash
+make destroy      # Destroys infra provisioned in infra/terraform
+# If you created a bootstrap S3 bucket and want to remove it too, empty and destroy it from infra/terraform/bootstrap
+```
+
+---
