@@ -10,8 +10,8 @@ server:
       cert-manager.io/cluster-issuer: letsencrypt-production
       nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
       nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    hostname: argocd.alistechlab.click
+    hostname: argocd.${domain}
     extraTls:
       - hosts:
-          - argocd.alistechlab.click
+          - argocd.${domain}
         secretName: argocd-server-tls

@@ -10,10 +10,10 @@ spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - guestbook.alistechlab.click
+    - guestbook.${DOMAIN}
     secretName: guestbook-tls
   rules:
-  - host: guestbook.alistechlab.click
+  - host: guestbook.${DOMAIN}
     http:
       paths:
       - path: /

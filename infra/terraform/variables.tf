@@ -34,16 +34,21 @@ variable "admin_cidrs" {
   default     = ["0.0.0.0/0"]
 }
 
+variable "domain" {
+  description = "Base domain"
+  type        = string
+}
+
 variable "hosted_zone_id" {
   description = "Route53 Hosted Zone ID"
   type        = string
-  default     = "Z0134000O7QQEZHP6XIL"
+  sensitive   = true
 }
 
 variable "external_dns_domain_filters" {
   description = "Domains ExternalDNS is allowed to manage"
   type        = list(string)
-  default     = ["alistechlab.click"]
+  default     = null
 }
 
 variable "external_dns_txt_owner_id" {
@@ -57,3 +62,4 @@ variable "acme_email" {
   type        = string
   sensitive   = true
 }
+

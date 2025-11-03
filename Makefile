@@ -16,30 +16,44 @@ K8S_DIR          := k8s
 INGRESS_NS := ingress-nginx
 CERT_NS    := cert-manager
 
+# Argo/app specifics (single Application file)
+ARGO_NS         := argo-cd
+ARGO_APP_FILE   := $(K8S_DIR)/argo-cd/guestbook-app.yaml
+
+# Guestbook K8s objects (as in your YAMLs)
+APP_NS          := default
+K8S_APP_DEPLOY  := guestbook-ui
+APP_CERT        := guestbook-tls
+APP_INGRESS     := guestbook
+APP_HOST        := guestbook.$(DOMAIN)
+
 # Files that still live in repo
 CLUSTER_ISSUER_FILE := $(K8S_DIR)/cert-manager/cluster-issuer.yaml
 
 # Convenience (for logs only)
 DOMAIN ?= $(DOMAIN)
 
-.PHONY: help up bootstrap infra kubeconfig wait-ingress cert-manager-wait issuer status dns destroy clean
+.PHONY: help up bootstrap infra kubeconfig wait-ingress cert-manager-wait issuer \
+        deploy-app wait-app status-app status dns destroy clean
 
 help:
 	@echo ""
 	@echo "Targets:"
-	@echo "  make up                          -> TF apply (incl. Helm), kubeconfig, wait ingress & cert-manager, apply ClusterIssuer"
+	@echo "  make up                          -> TF apply, kubeconfig, wait ingress & cert-manager, apply ClusterIssuer, deploy app"
 	@echo "  make infra                       -> terraform init/plan/apply in $(TF_DIR)"
 	@echo "  make kubeconfig                  -> set kubectl context from TF outputs"
 	@echo "  make wait-ingress                -> wait for ingress-nginx controller + ELB hostname"
 	@echo "  make cert-manager-wait           -> wait for cert-manager deployments"
 	@echo "  make issuer                      -> apply k8s/cert-manager/cluster-issuer.yaml (uses .env substitutions)"
+	@echo "  make deploy-app                  -> kubectl apply the Argo CD Application (guestbook)"
+	@echo "  make wait-app                    -> wait for Deployment + Certificate to be ready; print curl checks"
 	@echo "  make status                      -> quick cluster status (nodes, pods, svc/ing)"
 	@echo "  make dns                         -> quick DNS check for $(DOMAIN)"
 	@echo "  make destroy                     -> terraform destroy"
 	@echo ""
 
-# Full setup: Terraform builds VPC/EKS + Helm releases; Make waits and applies ClusterIssuer
-up: bootstrap infra kubeconfig wait-ingress cert-manager-wait issuer status
+# Full setup: Terraform builds VPC/EKS + Helm releases; Make then applies ClusterIssuer and deploys the app
+up: bootstrap infra kubeconfig wait-ingress cert-manager-wait issuer deploy-app wait-app status
 
 # --- Bootstrap (optional) ---
 bootstrap:
@@ -103,6 +117,23 @@ issuer:
 	    -e "s|\$${REGION}|$(REGION)|g" \
 	    -e "s|\$${HOSTED_ZONE_ID}|$(HOSTED_ZONE_ID)|g" \
 	    "$(CLUSTER_ISSUER_FILE)" | kubectl apply -f -
+
+# --- Deploy the Argo CD Application for the app (single file) ---
+deploy-app:
+	@echo "==> Applying Argo CD Application: $(ARGO_APP_FILE)"
+	kubectl -n $(ARGO_NS) apply -f "$(ARGO_APP_FILE)"
+
+# --- Wait for the app to be usable over HTTPS ---
+wait-app:
+	@echo "==> Waiting for Deployment/Certificate"
+	-kubectl -n $(APP_NS) rollout status deploy/$(K8S_APP_DEPLOY) --timeout=10m
+	-kubectl -n $(APP_NS) wait --for=condition=Ready certificate/$(APP_CERT) --timeout=10m
+	@echo "==> Ingress status"
+	-kubectl -n $(APP_NS) get ingress $(APP_INGRESS) -o wide
+	@echo "==> curl check (HTTP->HTTPS)"
+	-@curl -sI http://$(APP_HOST) | sed -n '1,3p' || true
+	@echo "==> TLS check"
+	-@curl -skI https://$(APP_HOST) | sed -n '1,3p' || true
 
 # --- Convenience status ---
 status:

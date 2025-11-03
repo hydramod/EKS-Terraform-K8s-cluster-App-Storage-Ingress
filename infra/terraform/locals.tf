@@ -13,4 +13,8 @@ locals {
   rel_ingress_nginx = "ingress-nginx"
   rel_external_dns  = "external-dns"
   rel_argocd        = "argo-cd"
+
+  external_dns_domain_filters = (
+    var.external_dns_domain_filters != null && length(var.external_dns_domain_filters) > 0
+  ) ? var.external_dns_domain_filters : [var.domain]
 }

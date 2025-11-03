@@ -45,7 +45,7 @@ resource "helm_release" "external_dns" {
     templatefile("${path.module}/helm-values/external-dns.yaml", {
       role_arn                    = module.external_dns_irsa.arn
       region                      = var.region
-      external_dns_domain_filters = var.external_dns_domain_filters
+      external_dns_domain_filters = local.external_dns_domain_filters
       hosted_zone_id              = var.hosted_zone_id
     })
   ]
@@ -67,7 +67,9 @@ resource "helm_release" "argocd_deploy" {
   replace          = true
 
   values = [
-    file("${path.module}/helm-values/argo-cd.yaml")
+    templatefile("${path.module}/helm-values/argo-cd.yaml", {
+        domain = var.domain
+    })
   ]
 
   wait            = true
