@@ -336,6 +336,156 @@ AWS_PROFILE=default
 
 ---
 
+## Troubleshooting — project‑specific learnings
+
+Below are issues we've actually hit (plus a few likely ones) and how to diagnose/fix quickly.
+
+### 1) kubeconfig/context drift
+
+**Symptom**: `You must be logged in to the server (Unauthorized)` or wrong cluster.
+
+**Fix**:
+
+```bash
+make kubeconfig
+kubectl config current-context
+kubectl get nodes -o wide
+```
+
+If outputs aren’t present yet, re‑run `make infra` first.
+
+### 2) Ingress‑NGINX `EXTERNAL-IP` pending
+
+**Symptom**: `kubectl -n ingress-nginx get svc ingress-nginx-controller` shows `pending` for a long time.
+
+**Checks**:
+
+* Subnet tags exist: `kubernetes.io/role/elb = 1` and `kubernetes.io/cluster/<cluster-name> = shared` on **public** subnets.
+* AWS account has Load Balancer quota.
+
+**Commands**:
+
+```bash
+kubectl -n ingress-nginx get svc ingress-nginx-controller -o wide
+cat .ingress_hostname || true
+```
+
+### 3) external‑dns not creating records
+
+**Symptoms**: No Route 53 records; logs show `No zones matched`, `AccessDenied`, or continuous `Desired change: CREATE` without effect.
+
+**Fix**:
+
+* Ensure `.env` **DOMAIN** matches your hosted zone and `HOSTED_ZONE_ID` is correct.
+* `external_dns_domain_filters` include your domain (and subdomains) in Terraform.
+* IRSA role attached & service account annotated.
+
+**Logs**:
+
+```bash
+kubectl -n kube-system logs deploy/external-dns | egrep 'No zones matched|AccessDenied|Desired change|Throttling' || true
+```
+
+### 4) cert‑manager DNS‑01 challenge stuck `Pending`
+
+**Symptoms**: `kubectl get certificate,order,challenge -A` shows `Pending/Failed` with Route 53 messages.
+
+**Fix**:
+
+* Run `make issuer` after add‑ons are ready so the **ClusterIssuer** exists.
+* Verify IRSA permissions for Route 53 (list/change record sets).
+* Use **staging** issuer first if you suspect Let’s Encrypt rate limits.
+
+**Debug**:
+
+```bash
+kubectl describe challenge -A | sed -n '1,120p'
+kubectl describe order -A | sed -n '1,120p'
+```
+
+### 5) Argo CD Ingress/TLS issues
+
+**Symptoms**: `argocd.${DOMAIN}` 404/timeout or invalid cert.
+
+**Fix**:
+
+* Confirm Helm values set host and `ingressClassName: nginx` (or annotation `kubernetes.io/ingress.class: nginx`).
+* Wait for certificate secret to appear; then:
+
+```bash
+kubectl -n argo-cd get ingress,svc,pods
+kubectl -n argo-cd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo
+```
+
+### 6) Namespace / Application mis‑wiring
+
+**Symptoms**: Argo CD shows `OutOfSync` or creates resources in the wrong namespace.
+
+**Fix**: Ensure `k8s/argo-cd/guestbook-app.yaml` `destination.namespace` and the manifests’ `metadata.namespace` are aligned (default to `default`).
+
+### 7) IRSA / OIDC trust problems
+
+**Symptoms**: `AccessDenied` from AWS APIs in cert‑manager/external‑dns despite roles.
+
+**Checks**:
+
+```bash
+# OIDC issuer on the cluster
+aws eks describe-cluster --name "$(terraform -chdir=infra/terraform output -raw cluster_name)" \
+  --region "$(terraform -chdir=infra/terraform output -raw region)" \
+  --query 'cluster.identity.oidc.issuer'
+
+# ServiceAccount annotations
+kubectl -n cert-manager get sa cert-manager -o yaml | grep eks.amazonaws.com/role-arn -n
+kubectl -n kube-system get sa external-dns -o yaml | grep eks.amazonaws.com/role-arn -n
+```
+
+Ensure the IAM role trust policy allows the cluster OIDC provider and audience `sts.amazonaws.com`.
+
+### 8) Terraform backend / lock issues
+
+**Symptoms**: `Error acquiring the state lock` or backend not configured after bootstrap.
+
+**Fix**:
+
+* In **main** Terraform (`infra/terraform`), configure the `backend "s3"` to the bucket created by bootstrap.
+* If a lock is stuck (with DynamoDB), use `terraform force-unlock <id>`.
+
+### 9) Helm CRD ordering/timeouts
+
+**Symptoms**: Helm install/upgrade fails on CRDs (esp. cert‑manager) or hits timeouts.
+
+**Fix**: Use chart settings that install CRDs (cert‑manager chart supports `installCRDs: true`), and consider longer timeouts/atomic installs in Terraform `helm_release`.
+
+### 10) Ingress class/annotation mismatch
+
+**Symptoms**: Ingress admitted by a different controller or not at all.
+
+**Fix**: Ensure **either** `ingressClassName: nginx` **or** the legacy annotation `kubernetes.io/ingress.class: nginx` is present and matches your controller.
+
+### 11) DNS propagation / testing without DNS
+
+**Tip**: While waiting for DNS, test with the raw ELB hostname saved by `make wait-ingress`:
+
+```bash
+ELB=$(cat .ingress_hostname)
+curl -skI https://$ELB | sed -n '1,3p'
+```
+
+### 12) HTTP→HTTPS redirect loops / 308s
+
+**Symptoms**: `curl -I` shows repeated 30x.
+
+**Fix**: Ensure your app/service doesn’t also enforce redirects conflicting with the Ingress annotations and that the TLS hostnames match `guestbook.${DOMAIN}`.
+
+### 13) Makefile env not set
+
+**Symptoms**: `make issuer` errors about missing `ACME_EMAIL`, `DOMAIN`, `REGION`, `HOSTED_ZONE_ID`.
+
+**Fix**: Create/populate `.env` in repo root. Re-run `make up` or `make issuer`.
+
+---
+
 ## Security & Cost Notes
 
 * This stack creates billable resources (EKS, Load Balancers, NAT, Route 53, etc.). **Destroy** when not in use.
