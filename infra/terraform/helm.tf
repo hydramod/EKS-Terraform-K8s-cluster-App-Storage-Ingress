@@ -68,7 +68,7 @@ resource "helm_release" "argocd_deploy" {
 
   values = [
     templatefile("${path.module}/helm-values/argo-cd.yaml", {
-        domain = var.domain
+      domain = var.domain
     })
   ]
 

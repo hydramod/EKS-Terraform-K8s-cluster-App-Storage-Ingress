@@ -9,9 +9,9 @@ module "eks" {
   subnet_ids = module.vpc.private_subnets
 
   enable_cluster_creator_admin_permissions = true
-  endpoint_public_access                   = true
+  endpoint_public_access                   = var.enable_endpoint_public_access
   endpoint_private_access                  = true
-  endpoint_public_access_cidrs             = var.admin_cidrs
+  endpoint_public_access_cidrs             = local.admin_cidrs
 
   addons = {
     coredns    = {}
@@ -31,10 +31,10 @@ module "eks" {
 
   eks_managed_node_groups = {
     default = {
-      instance_types = [var.node_instance_types]
+      instance_types = var.node_instance_types
       desired_size   = var.node_desired_size
-      min_size       = var.node_desired_size
-      max_size       = var.node_desired_size * 2
+      min_size       = var.node_min_size
+      max_size       = var.node_max_size
     }
   }
 }

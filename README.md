@@ -202,10 +202,12 @@ AWS_PROFILE=default
    * Creates S3 bucket `bucket_name` (default example: `eks-demo-alistechlab`, region `us-east-1`)
    * This folder **keeps local state**; do not point it at the bucket it creates
 
+  > Copy `infra/terraform/backend.hcl.example` to `infra/terraform/backend.hcl` and fill in your remote state settings before initializing the main module.
+
 2. **Provision infra**
 
    ```bash
-   terraform -chdir=infra/terraform init -upgrade
+   terraform -chdir=infra/terraform init -upgrade -backend-config=backend.hcl
    terraform -chdir=infra/terraform plan
    terraform -chdir=infra/terraform apply -auto-approve
    ```

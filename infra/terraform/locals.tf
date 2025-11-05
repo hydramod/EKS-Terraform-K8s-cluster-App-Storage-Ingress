@@ -17,4 +17,7 @@ locals {
   external_dns_domain_filters = (
     var.external_dns_domain_filters != null && length(var.external_dns_domain_filters) > 0
   ) ? var.external_dns_domain_filters : [var.domain]
+
+  my_ipv4     = chomp(data.http.my_ip.response_body)
+  admin_cidrs = concat(["${local.my_ipv4}/32"], var.extra_admin_cidrs)
 }

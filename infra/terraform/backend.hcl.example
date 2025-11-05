@@ -1,0 +1,9 @@
+bucket         = "your-terraform-state-bucket"
+key            = "env/cluster/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "terraform-locks"
+encrypt        = true
+
+bucket = "eks-demo-alistechlab"
+key    = "terraform.tfstate"
+region = "us-east-1"

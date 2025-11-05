@@ -13,12 +13,16 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "2.38.0"
     }
+    http = {
+      source = "hashicorp/http"
+    }
   }
 
   backend "s3" {
-    bucket = "eks-demo-alistechlab"
-    key    = "terraform.tfstate"
+    bucket         = "eks-demo-alistechlab"
+    key            = "terraform.tfstate"
     region = "us-east-1"
+    encrypt        = true
   }
 }
 
